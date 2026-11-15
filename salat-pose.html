@@ -12,7 +12,7 @@ body{background:var(--bg);color:var(--fg);font-family:"Segoe UI",Tahoma,"Noto Na
 h1{font-size:1.3rem;text-align:center;margin:8px 0 12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-button{font:inherit;font-size:1rem;padding:11px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
+button,select{font:inherit;font-size:1rem;padding:11px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
 button.p{background:var(--btn);color:#fff;border:0}button:disabled{opacity:.5}
 button.sel{outline:3px solid var(--y)}
 .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.row button{flex:1;min-width:30%}
@@ -26,7 +26,7 @@ td.na{color:var(--mut)}
 #st{font-size:1.2rem;text-align:center;font-weight:600;margin:0 0 10px;min-height:2.2em}
 .vw{position:relative}.vw video,.vw canvas{width:100%;max-height:200px;border-radius:10px;background:#000;object-fit:cover}
 .vw canvas{position:absolute;inset:0;height:100%}
-.sm{font-size:.85rem;color:var(--mut);margin:8px 0 0}
+.sm{font-size:.85rem;color:var(--mut);margin:8px 0 0;line-height:1.6}
 label{display:block;font-size:.9rem;margin-top:8px}input[type=range]{width:100%}
 .hide{display:none}
 </style>
@@ -36,9 +36,10 @@ label{display:block;font-size:.9rem;margin-top:8px}input[type=range]{width:100%}
 <div id="setup" class="card">
   <div style="margin-bottom:8px">اختر الصلاة:</div>
   <div class="grid" id="pr"></div>
+  <label>زاوية الهاتف (للتقرير فقط) <select id="angsel"><option>45</option><option>60</option></select></label>
   <div class="row"><button id="camBtn">السماح بالكاميرا</button></div>
   <div class="row"><button id="go" class="p" disabled>ابدأ</button></div>
-  <p class="sm">ضع الهاتف على السجادة بزاوية تقارب ٤٥° أمام موضع رأسك في السجود. تُعالَج الصورة على جهازك فقط ولا يتم تسجيل شيء.</p>
+  <p class="sm">ضع الهاتف على السجادة أمام موضع رأسك في السجود. تُعالَج الصورة والصوت على جهازك فقط ولا يتم تسجيل شيء.</p>
   <p class="sm" id="ld">جارٍ تحميل نموذج التعرّف على الجسم…</p>
 </div>
 <div id="runbox" class="hide">
@@ -48,7 +49,7 @@ label{display:block;font-size:.9rem;margin-top:8px}input[type=range]{width:100%}
     <div class="vw"><video id="v" autoplay muted playsinline></video><canvas id="ov"></canvas></div>
     <p class="sm" id="info"></p>
     <label>عتبة السجود (قرب الكتفين من الكاميرا) <input type="range" id="k" min="1.2" max="3" step="0.1" value="1.8"></label>
-    <div class="row"><button id="nx">التالي ›</button><button id="undo">تراجع</button><button id="flip">عكس النقاط</button><button id="reset">إعادة</button></div>
+    <div class="row"><button id="nx">التالي ›</button><button id="undo">تراجع</button><button id="flip">عكس النقاط</button><button id="reset">إعادة</button><button id="xport" class="p">تصدير التقرير</button></div>
   </div>
 </div>
 
@@ -59,7 +60,7 @@ var ORD=["الأولى","الثانية","الثالثة","الرابعة"];
 var STEPS=["القراءة","الركوع","الرفع من الركوع","السجدة الأولى","الجلوس بين السجدتين","السجدة الثانية","التشهد"];
 var HDR=["قراءة","ركوع","رفع من الركوع","سجود أول","جلوس بين السجدتين","سجود ثاني","التشهد"];
 var $=function(i){return document.getElementById(i)};
-var key=null,n=0,rows=[],cur=0,st=0,sitT=null,hist=[],camOn=false,pose=null,phase="setup",base=null,samples=[],t0=0,cand="قيام",candAt=0,curP="قيام",lastT=0,mir=true,turn={a:false,b:false};
+var key=null,n=0,rows=[],cur=0,st=0,hist=[],camOn=false,pose=null,phase="setup",base=null,samples=[],cand="قيام",curP="قيام",cnt=0,lastT=0,mir=true,hint=false,hc=0,huPrev=false,frames=0,tStart=0,snd="غير متاح",LOG=[],EV=[];
 
 try{
   var fs=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
@@ -82,35 +83,43 @@ $("camBtn").onclick=async function(){
 };
 $("go").onclick=function(){
   n=PR[key][1];rows=[];
-  for(var i=0;i<n;i++){var r=[0,0,0,0,0,0,((i===1&&n>2)||i===n-1)?0:null];rows.push(r)}
-  cur=0;st=0;rows[0][0]=1;hist=[];clearTimeout(sitT);samples=[];t0=Date.now();phase="calib";curP="قيام";cand="قيام";
-  $("setup").classList.add("hide");$("runbox").classList.remove("hide");render();loop();
+  for(var i=0;i<n;i++)rows.push([0,0,0,0,0,0,((i===1&&n>2)||i===n-1)?0:null]);
+  cur=0;st=0;hist=[];samples=[];phase="calib";curP="قيام";cand="قيام";cnt=0;hint=false;hc=0;LOG=[];EV=[];tStart=performance.now();
+  $("setup").classList.add("hide");$("runbox").classList.remove("hide");render();startSnd();loop();
 };
-$("reset").onclick=function(){clearTimeout(sitT);phase="setup";$("runbox").classList.add("hide");$("setup").classList.remove("hide")};
+$("reset").onclick=function(){phase="setup";$("runbox").classList.add("hide");$("setup").classList.remove("hide")};
 $("flip").onclick=function(){mir=!mir};
-$("nx").onclick=function(){if(phase!=="run"||fin())return;if(st===5&&rows[cur][6]===null||st===6)nextRow();else go(st+1);render()};
-$("undo").onclick=function(){if(!hist.length)return;var o=JSON.parse(hist.pop());rows=o.rows;cur=o.cur;st=o.st;clearTimeout(sitT);render()};
+$("nx").onclick=function(){
+  if(phase==="wait"){begin();return}
+  if(phase!=="run"||fin())return;
+  if((st===5&&rows[cur][6]===null)||st===6)nextRow();else go(st+1);render();
+};
+$("undo").onclick=function(){if(!hist.length)return;var o=JSON.parse(hist.pop());rows=o.rows;cur=o.cur;st=o.st;render()};
+$("xport").onclick=async function(){
+  var txt=JSON.stringify({meta:{angle:$("angsel").value,prayer:key,sujudThreshold:$("k").value,base:base,sound:snd},colonnes:"t,pose,proximite,descente,alignement,yaw,yawOreilles,mains,genoux,rakaa,etape",log:LOG,events:EV});
+  var file=new File([txt],"salat-test.json",{type:"application/json"});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return}}catch(e){}
+  var a=document.createElement("a");a.href=URL.createObjectURL(file);a.download="salat-test.json";a.click();
+};
 
+function ev(t,v){EV.push([+((performance.now()-tStart)/1000).toFixed(1),t,v,cur,st])}
 function snap(){hist.push(JSON.stringify({rows:rows,cur:cur,st:st}));if(hist.length>60)hist.shift()}
 function fin(){return cur>=n}
 function go(s){
-  if(s<=st)return;snap();clearTimeout(sitT);var r=rows[cur];
+  if(s<=st)return;snap();var r=rows[cur];
   for(var j=0;j<s;j++)if(r[j]!==null)r[j]=2;
-  r[s]=1;st=s;
-  turn={a:false,b:false};
+  r[s]=1;st=s;ev("etape",s);
 }
 function nextRow(){
-  snap();clearTimeout(sitT);var r=rows[cur];
+  snap();var r=rows[cur];
   for(var j=0;j<7;j++)if(r[j]!==null)r[j]=2;
-  cur++;st=0;if(cur<n)rows[cur][0]=1;
+  cur++;st=0;if(cur<n)rows[cur][0]=1;ev("rakaa",cur);
 }
+function begin(){rows[0][0]=1;phase="run";hint=false;huPrev=true;ev("takbir",1);render()}
 function needT(){return rows[cur][6]!==null}
 function onPose(p){
   if(fin())return;
-  if(p==="سجود"){
-    if(st<3)go(3);else if(st===4)go(5);
-    return;
-  }
+  if(p==="سجود"){if(st<3)go(3);else if(st===4)go(5);return}
   if(st===0){if(p==="ركوع")go(1)}
   else if(st===1){if(p==="قيام")go(2)}
   else if(st===3)go(4);
@@ -118,47 +127,93 @@ function onPose(p){
   else if(st===6){if(p==="قيام"&&cur<n-1)nextRow()}
 }
 function render(){
-  if(phase==="calib")$("st").textContent="قف مستقيماً للمعايرة…";
-  else $("st").textContent=fin()?"تمّت الصلاة، تقبّل الله":"الركعة "+ORD[cur]+" — "+STEPS[st]+(st===6&&cur===n-1?" (ينتهي بالتسليم يميناً ويساراً)":"");
+  var s;
+  if(phase==="calib")s="قف مستقيماً للمعايرة…";
+  else if(phase==="wait")s="ارفع يديك للتكبير";
+  else s=fin()?"تمّت الصلاة، تقبّل الله":"الركعة "+ORD[cur]+" — "+STEPS[st];
+  $("st").textContent=s;
   $("tb").innerHTML=rows.map(function(r,i){
-    var cl=i<cur?"c2":(i===cur&&!fin()?"c1":"");
+    var cl=i<cur?"c2":(i===cur&&!fin()&&phase==="run"?"c1":"");
     return '<tr><th class="'+cl+'">ركعة '+(i+1)+"</th>"+r.map(function(v){
       return v===2?'<td class="c2">✓</td>':v===1?'<td class="c1">…</td>':v===null?'<td class="na">–</td>':"<td></td>";
     }).join("")+"</tr>";
   }).join("");
 }
 
+/* الصوت: مساعد فقط، لا يُشترط أبداً */
+function startSnd(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;
+  try{
+    var r=new SR();r.lang="ar-SA";r.continuous=true;r.interimResults=true;
+    r.onresult=function(e){var t="";for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript+" ";hear(t)};
+    r.onerror=function(){snd="خطأ"};
+    r.onend=function(){if(phase!=="setup"){try{r.start()}catch(x){}}};
+    r.start();snd="يستمع";
+  }catch(e){snd="غير متاح"}
+}
+function hear(t){
+  if(phase!=="run"||fin())return;
+  t=t.replace(/[\u064B-\u065F\u0670]/g,"").replace(/[أإآ]/g,"ا");
+  if(/اكبر/.test(t))hint=true;
+  if(/سمع الله|حمده/.test(t)&&st===1){go(2);render()}
+  if(/السلام عليكم/.test(t)&&st===6&&cur===n-1){nextRow();render()}
+}
+
+function feat(lm){
+  var a=lm[11],b=lm[12],z=lm[0];
+  if(Math.min(a.visibility,b.visibility)<0.4)return null;
+  var sw=Math.hypot(a.x-b.x,a.y-b.y),sy=(a.y+b.y)/2,e1=lm[7],e2=lm[8],ev2=Math.min(e1.visibility,e2.visibility)>0.3;
+  return{sw:sw,sy:sy,hdn:(z.y-sy)/sw,yaw:(z.x-(a.x+b.x)/2)/sw,yaw2:ev2?(z.x-(e1.x+e2.x)/2)/Math.max(Math.abs(e1.x-e2.x),0.02):0,vd:e1.visibility-e2.visibility};
+}
+function handsUp(lm,f){
+  if(!f)return false;
+  return [15,16].some(function(i){return lm[i].visibility>0.5&&lm[i].y<f.sy});
+}
+function kneeBonus(lm){
+  return [[15,25],[16,26]].some(function(p){var w=lm[p[0]],k=lm[p[1]];return w.visibility>0.4&&k.visibility>0.4&&Math.abs(w.x-k.x)<0.15&&Math.abs(w.y-k.y)<0.15});
+}
+function avg(a,k){return a.reduce(function(s,x){return s+x[k]},0)/a.length}
+var GROUPS=[[[0,11,12,23,24],"#f5c542"],[[7,8],"#40c4ff"],[[15,16],"#ff4fd8"],[[25,26],"#ff9a3c"]];
+
 function loop(){
   if(phase==="setup")return;
   requestAnimationFrame(loop);
   var v=$("v"),now=performance.now();
-  if(!v.videoWidth||now-lastT<100)return;lastT=now;
-  var lm=pose.detectForVideo(v,now).landmarks[0],f=null;
+  if(!v.videoWidth||now-lastT<100)return;lastT=now;frames++;
+  var lm=pose.detectForVideo(v,now).landmarks[0],f=null,hu=false,kb=false;
   var ov=$("ov"),g=ov.getContext("2d");ov.width=v.videoWidth;ov.height=v.videoHeight;g.clearRect(0,0,ov.width,ov.height);
   if(lm){
-    [0,11,12,23,24].forEach(function(i){var x=mir?1-lm[i].x:lm[i].x;g.fillStyle="#f5c542";g.beginPath();g.arc(x*ov.width,lm[i].y*ov.height,6,0,7);g.fill()});
-    var a=lm[11],b=lm[12];
-    if(Math.min(a.visibility,b.visibility)>0.4){var sw0=Math.hypot(a.x-b.x,a.y-b.y);f={sw:sw0,sy:(a.y+b.y)/2,yaw:(lm[0].x-(a.x+b.x)/2)/sw0}}
+    GROUPS.forEach(function(gr){gr[0].forEach(function(i){
+      if(lm[i].visibility<0.3&&i!==0)return;
+      var x=mir?1-lm[i].x:lm[i].x;g.fillStyle=gr[1];g.beginPath();g.arc(x*ov.width,lm[i].y*ov.height,6,0,7);g.fill();
+    })});
+    f=feat(lm);hu=handsUp(lm,f);kb=kneeBonus(lm);
   }
   if(phase==="calib"){
     if(f)samples.push(f);
-    $("st").textContent="قف مستقيماً للمعايرة… "+Math.max(Math.ceil((3000-(Date.now()-t0))/1000),0);
-    if(Date.now()-t0>=3000){
-      if(samples.length<5){t0=Date.now();samples=[];return}
-      base={sw:samples.reduce(function(s,x){return s+x.sw},0)/samples.length,sy:samples.reduce(function(s,x){return s+x.sy},0)/samples.length,yaw:samples.reduce(function(s,x){return s+x.yaw},0)/samples.length};
-      phase="run";render();
+    $("st").textContent="قف مستقيماً للمعايرة… "+Math.max(30-samples.length,0);
+    if(samples.length>=30){
+      base={sw:avg(samples,"sw"),sy:avg(samples,"sy"),hdn:avg(samples,"hdn"),yaw:avg(samples,"yaw"),yaw2:avg(samples,"yaw2"),vd:avg(samples,"vd")};
+      phase="wait";hc=0;render();
     }
     return;
   }
-  var ratio=f?f.sw/base.sw:99,dy=f?f.sy-base.sy:0,yaw=f?f.yaw-base.yaw:0,k=parseFloat($("k").value),name;
+  if(phase==="wait"){hc=hu?hc+1:0;if(hc>=4)begin();return}
+  if(hu&&!huPrev)hint=true;huPrev=hu;
+  var ratio=f?f.sw/base.sw:99,dy=f?f.sy-base.sy:0,hd=f?f.hdn:0,k=parseFloat($("k").value),name;
+  var yw=f?f.yaw-base.yaw:0,yw2=f?f.yaw2-base.yaw2:0,vd=f?f.vd-base.vd:0;
   if(!f||ratio>k)name="سجود";
-  else if(ratio>1+(k-1)*0.4)name="ركوع";
+  else if(hd>base.hdn*0.35||(kb&&ratio>1.1))name="ركوع";
   else if(dy>0.15)name="جلوس";
   else name="قيام";
-  $("info").textContent="الوضعية المكتشفة: "+name+" — القرب "+(f?ratio.toFixed(2):"—")+" — الانخفاض "+dy.toFixed(2)+" — الالتفات "+yaw.toFixed(2);
-  if(st===6&&cur===n-1){if(yaw>0.3)turn.a=true;if(yaw<-0.3)turn.b=true;if(turn.a&&turn.b){nextRow();render();return}}
-  if(name!==cand){cand=name;candAt=Date.now()}
-  if(cand!==curP&&Date.now()-candAt>=500){curP=cand;onPose(cand);render()}
+  $("info").textContent="الوضعية: "+name+" | قرب "+(f?ratio.toFixed(2):"—")+" | محاذاة "+hd.toFixed(2)+" (مرجع "+base.hdn.toFixed(2)+") | التفات "+yw.toFixed(2)+" / "+yw2.toFixed(2)+" | يدان "+(hu?"↑":"–")+" | ركبتان "+(kb?"✓":"–")+" | الصوت: "+snd;
+  if(frames%5===0&&LOG.length<4000)LOG.push([+((now-tStart)/1000).toFixed(1),name,+ratio.toFixed(2),+dy.toFixed(2),+hd.toFixed(2),+yw.toFixed(2),+yw2.toFixed(2),hu?1:0,kb?1:0,cur,st]);
+  if(st===6&&cur===n-1&&f&&(Math.abs(yw)>0.3||Math.abs(yw2)>0.6||Math.abs(vd)>0.5)){ev("taslim",1);nextRow();render();return}
+  if(name===curP){cand=name;cnt=0}
+  else{
+    if(name===cand)cnt++;else{cand=name;cnt=1}
+    if(cnt>=(hint?2:5)){curP=name;cnt=0;hint=false;ev("pose",name);onPose(name);render()}
+  }
 }
 </script>
 </body>
