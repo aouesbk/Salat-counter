@@ -40,12 +40,12 @@ label{display:block;font-size:.9rem;margin-top:8px}input[type=range]{width:100%}
   <p class="sm">ضع الهاتف على السجادة بزاوية تقارب ٤٥° أمام موضع رأسك في السجود. تُعالَج الصورة على جهازك فقط ولا يتم تسجيل شيء.</p>
   <p class="sm" id="ld">جارٍ تحميل نموذج التعرّف على الجسم…</p>
 </div>
-<div id="run" class="hide">
+<div id="runbox" class="hide">
   <p id="st"></p>
   <div class="card" style="padding:6px"><table><thead><tr><th></th><th>السجدة ١</th><th>السجدة ٢</th><th>التشهد</th></tr></thead><tbody id="tb"></tbody></table></div>
   <div class="card">
     <div class="vw"><video id="v" autoplay muted playsinline></video><canvas id="ov"></canvas></div>
-    <p class="sm" id="dbg"></p>
+    <p class="sm" id="info"></p>
     <label>عتبة السجود (قرب الكتفين من الكاميرا) <input type="range" id="k" min="1.2" max="3" step="0.1" value="1.8"></label>
     <div class="row"><button id="man">محاكاة: سجود / رفع</button><button id="undo">تراجع</button><button id="reset">إعادة</button></div>
   </div>
@@ -80,9 +80,9 @@ $("go").onclick=function(){
   n=PR[key][1];rows=[];
   for(var i=0;i<n;i++)rows.push({s:[0,0],t:(i===1&&n>2)||i===n-1?0:null});
   cur=0;sujud=false;hist=[];clearTimeout(sitT);samples=[];t0=Date.now();phase="calib";
-  $("setup").classList.add("hide");$("run").classList.remove("hide");render();loop();
+  $("setup").classList.add("hide");$("runbox").classList.remove("hide");render();loop();
 };
-$("reset").onclick=function(){clearTimeout(sitT);phase="setup";$("run").classList.add("hide");$("setup").classList.remove("hide")};
+$("reset").onclick=function(){clearTimeout(sitT);phase="setup";$("runbox").classList.add("hide");$("setup").classList.remove("hide")};
 $("man").onclick=function(){if(phase==="run")setSujud(!sujud)};
 $("undo").onclick=function(){if(!hist.length)return;var o=JSON.parse(hist.pop());rows=o.rows;cur=o.cur;sujud=false;clearTimeout(sitT);render()};
 
@@ -144,7 +144,7 @@ function loop(){
   else if(ratio>1+(k-1)*0.4)name="ركوع";
   else if(dy>0.15)name="جلوس";
   else name="قيام";
-  $("dbg").textContent="الوضعية المكتشفة: "+name+" — القرب "+(f?ratio.toFixed(2):"—")+" — الانخفاض "+dy.toFixed(2);
+  $("info").textContent="الوضعية المكتشفة: "+name+" — القرب "+(f?ratio.toFixed(2):"—")+" — الانخفاض "+dy.toFixed(2);
   var want=name==="سجود";
   if(want!==cand){cand=want;candAt=Date.now()}
   if(cand!==sujud&&Date.now()-candAt>=700)setSujud(cand);
